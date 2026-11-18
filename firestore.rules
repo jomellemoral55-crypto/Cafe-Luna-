@@ -1,0 +1,262 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Bootstrapped admin via verified email claim (zero DB lookups, safe for list queries)
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        'email' in request.auth.token &&
+        'email_verified' in request.auth.token &&
+        request.auth.token.email == 'jomellemoral55@gmail.com' &&
+        request.auth.token.email_verified == true;
+    }
+
+    // Full admin check for single-doc ops & writes
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+        (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // --- ENTITY VALIDATION HELPERS ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        data.email is string && data.email.size() <= 120 &&
+        (!('phone' in data) || data.phone == null || (data.phone is string && data.phone.size() <= 30)) &&
+        data.role in ['customer', 'admin'] &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+        data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidCategory(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 40 &&
+        data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 1000 &&
+        data.active is bool &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        data.description is string && data.description.size() <= 400 &&
+        data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 64 &&
+        data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 40 &&
+        (data.pricePhp is int || data.pricePhp is float) && data.pricePhp >= 0 && data.pricePhp <= 100000 &&
+        data.imageKey is string && data.imageKey.size() <= 100 &&
+        (!('localImagePath' in data) || data.localImagePath == null || (data.localImagePath is string && data.localImagePath.size() <= 500)) &&
+        data.featured is bool &&
+        data.bestSeller is bool &&
+        data.available is bool &&
+        data.sampleData is bool &&
+        data.customizableDrink is bool &&
+        data.allowedTemps is list && data.allowedTemps.size() <= 5 &&
+        (data.allowedTemps.size() == 0 || data.allowedTemps[0] is string) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCartItem(data) {
+      return data.productId is string && data.productId.size() >= 1 && data.productId.size() <= 64 &&
+        data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 80 &&
+        data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 40 &&
+        data.imageKey is string && data.imageKey.size() <= 100 &&
+        (!('localImagePath' in data) || data.localImagePath == null || (data.localImagePath is string && data.localImagePath.size() <= 500)) &&
+        (data.basePricePhp is int || data.basePricePhp is float) && data.basePricePhp >= 0 && data.basePricePhp <= 100000 &&
+        (data.unitPricePhp is int || data.unitPricePhp is float) && data.unitPricePhp >= 0 && data.unitPricePhp <= 100000 &&
+        data.quantity is int && data.quantity >= 1 && data.quantity <= 50 &&
+        data.temperature is string && data.temperature.size() <= 20 &&
+        data.size is string && data.size.size() <= 20 &&
+        data.sugarLevel is string && data.sugarLevel.size() <= 20 &&
+        data.milkPreference is string && data.milkPreference.size() <= 30 &&
+        data.extraShots is int && data.extraShots >= 0 && data.extraShots <= 5 &&
+        data.addOns is list && data.addOns.size() <= 10 &&
+        (data.addOns.size() == 0 || data.addOns[0] is string) &&
+        data.customizationSummary is string && data.customizationSummary.size() <= 200 &&
+        data.customizableDrink is bool &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidOrder(data) {
+      return data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 20 &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80 &&
+        data.contactNumber is string && data.contactNumber.size() >= 4 && data.contactNumber.size() <= 25 &&
+        data.orderType in ['Pickup', 'Dine-in'] &&
+        data.paymentMethod in ['Cash', 'GCash (Simulation)'] &&
+        data.status in ['Order Received', 'Preparing Your Order', 'Ready for Pickup', 'Completed', 'Cancelled'] &&
+        data.items is list && data.items.size() >= 1 && data.items.size() <= 30 &&
+        (data.items[0] is map) &&
+        (data.subtotalPhp is int || data.subtotalPhp is float) && data.subtotalPhp >= 0 && data.subtotalPhp <= 1000000 &&
+        (data.serviceChargePhp is int || data.serviceChargePhp is float) && data.serviceChargePhp >= 0 && data.serviceChargePhp <= 100000 &&
+        (data.totalPhp is int || data.totalPhp is float) && data.totalPhp >= 0 && data.totalPhp <= 1100000 &&
+        (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 200)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- COLLECTION RULES ---
+
+    // 1. User Profiles (Strict PII Isolation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        incoming().userId == request.auth.uid &&
+        (incoming().role == 'customer' || isBootstrappedAdmin()) &&
+        incoming().keys().hasAll(['userId', 'displayName', 'email', 'role', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'displayName', 'email', 'phone', 'role', 'createdAt', 'updatedAt']) &&
+        isValidUserProfile(incoming());
+
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      // 1b. User-Scoped Cart Subcollection
+      match /cart/{cartItemId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(cartItemId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(cartItemId) &&
+          incoming().keys().hasAll(['productId', 'productName', 'categoryName', 'imageKey', 'basePricePhp', 'unitPricePhp', 'quantity', 'temperature', 'size', 'sugarLevel', 'milkPreference', 'extraShots', 'addOns', 'customizationSummary', 'customizableDrink', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['productId', 'productName', 'categoryName', 'imageKey', 'localImagePath', 'basePricePhp', 'unitPricePhp', 'quantity', 'temperature', 'size', 'sugarLevel', 'milkPreference', 'extraShots', 'addOns', 'customizationSummary', 'customizableDrink', 'createdAt', 'updatedAt']) &&
+          isValidCartItem(incoming());
+
+        allow update: if isOwner(userId) &&
+          isValidId(cartItemId) &&
+          isValidCartItem(incoming()) &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['quantity', 'unitPricePhp', 'temperature', 'size', 'sugarLevel', 'milkPreference', 'extraShots', 'addOns', 'customizationSummary', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(cartItemId);
+      }
+    }
+
+    // 2. Admins Registry
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create, update: if isValidId(adminId) && isBootstrappedAdmin() &&
+        incoming().keys().hasAll(['userId', 'email', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'email', 'createdAt']) &&
+        isValidAdminRecord(incoming());
+      allow delete: if isValidId(adminId) && isBootstrappedAdmin();
+    }
+
+    // 3. Menu Categories (Catalog: read by signed-in users, write by admins)
+    match /categories/{categoryId} {
+      allow get: if isSignedIn() && isValidId(categoryId);
+      allow list: if isSignedIn();
+
+      allow create: if isAdmin() &&
+        isValidId(categoryId) &&
+        incoming().keys().hasAll(['name', 'sortOrder', 'active', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['name', 'sortOrder', 'active', 'createdAt', 'updatedAt']) &&
+        isValidCategory(incoming());
+
+      allow update: if isAdmin() &&
+        isValidId(categoryId) &&
+        isValidCategory(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'sortOrder', 'active', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(categoryId);
+    }
+
+    // 4. Menu Products (Catalog: read by signed-in users, write by admins)
+    match /products/{productId} {
+      allow get: if isSignedIn() && isValidId(productId);
+      allow list: if isSignedIn();
+
+      allow create: if isAdmin() &&
+        isValidId(productId) &&
+        incoming().keys().hasAll(['name', 'description', 'categoryId', 'categoryName', 'pricePhp', 'imageKey', 'featured', 'bestSeller', 'available', 'sampleData', 'customizableDrink', 'allowedTemps', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['name', 'description', 'categoryId', 'categoryName', 'pricePhp', 'imageKey', 'localImagePath', 'featured', 'bestSeller', 'available', 'sampleData', 'customizableDrink', 'allowedTemps', 'createdAt', 'updatedAt']) &&
+        isValidProduct(incoming());
+
+      allow update: if isAdmin() &&
+        isValidId(productId) &&
+        isValidProduct(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'categoryId', 'categoryName', 'pricePhp', 'imageKey', 'localImagePath', 'featured', 'bestSeller', 'available', 'sampleData', 'customizableDrink', 'allowedTemps', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(productId);
+    }
+
+    // 5. Customer Orders (Owner + Admin Isolation, Terminal State Lock)
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isBootstrappedAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(orderId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'Order Received' &&
+        incoming().keys().hasAll(['orderNumber', 'userId', 'customerName', 'contactNumber', 'orderType', 'paymentMethod', 'status', 'items', 'subtotalPhp', 'serviceChargePhp', 'totalPhp', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['orderNumber', 'userId', 'customerName', 'contactNumber', 'orderType', 'paymentMethod', 'status', 'items', 'subtotalPhp', 'serviceChargePhp', 'totalPhp', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidOrder(incoming());
+
+      allow update: if isSignedIn() &&
+        isValidId(orderId) &&
+        isValidOrder(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().orderNumber == existing().orderNumber && (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            !(existing().status in ['Completed', 'Cancelled']) &&
+            incoming().status == 'Cancelled' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+  }
+}

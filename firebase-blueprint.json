@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated customer or admin profile with isolated PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["customer", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Client submits FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Client submits FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "email", "role", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted admin UID registry document.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "MenuCategory": {
+      "title": "MenuCategory",
+      "description": "Coffee shop menu category (e.g., Coffee, Non-Coffee, Tea, Pastries).",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "sortOrder", "active", "createdAt", "updatedAt"]
+    },
+    "MenuProduct": {
+      "title": "MenuProduct",
+      "description": "Menu item for Café Antonio Luna with pricing in PHP and customization metadata.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "pricePhp": { "type": "number" },
+        "imageKey": { "type": "string" },
+        "localImagePath": { "type": "string" },
+        "featured": { "type": "boolean" },
+        "bestSeller": { "type": "boolean" },
+        "available": { "type": "boolean" },
+        "sampleData": { "type": "boolean" },
+        "customizableDrink": { "type": "boolean" },
+        "allowedTemps": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "categoryId", "categoryName", "pricePhp", "imageKey", "featured", "bestSeller", "available", "sampleData", "customizableDrink", "allowedTemps", "createdAt", "updatedAt"]
+    },
+    "CartItem": {
+      "title": "CartItem",
+      "description": "Customized item in a customer's shopping cart.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "imageKey": { "type": "string" },
+        "localImagePath": { "type": "string" },
+        "basePricePhp": { "type": "number" },
+        "unitPricePhp": { "type": "number" },
+        "quantity": { "type": "integer" },
+        "temperature": { "type": "string" },
+        "size": { "type": "string" },
+        "sugarLevel": { "type": "string" },
+        "milkPreference": { "type": "string" },
+        "extraShots": { "type": "integer" },
+        "addOns": { "type": "array" },
+        "customizationSummary": { "type": "string" },
+        "customizableDrink": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "productName", "categoryName", "imageKey", "basePricePhp", "unitPricePhp", "quantity", "temperature", "size", "sugarLevel", "milkPreference", "extraShots", "addOns", "customizationSummary", "customizableDrink", "createdAt", "updatedAt"]
+    },
+    "CafeOrder": {
+      "title": "CafeOrder",
+      "description": "Customer coffee shop order with status tracking.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "userId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "orderType": { "type": "string", "enum": ["Pickup", "Dine-in"] },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "GCash (Simulation)"] },
+        "status": { "type": "string", "enum": ["Order Received", "Preparing Your Order", "Ready for Pickup", "Completed", "Cancelled"] },
+        "items": { "type": "array" },
+        "subtotalPhp": { "type": "number" },
+        "serviceChargePhp": { "type": "number" },
+        "totalPhp": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderNumber", "userId", "customerName", "contactNumber", "orderType", "paymentMethod", "status", "items", "subtotalPhp", "serviceChargePhp", "totalPhp", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private customer/admin user profile with PII isolation."
+    },
+    "/users/{userId}/cart/{cartItemId}": {
+      "schema": { "$ref": "#/entities/CartItem" },
+      "description": "User-scoped persistent shopping cart items."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin UID registry."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/MenuCategory" },
+      "description": "Menu categories managed by admins."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/MenuProduct" },
+      "description": "Café Antonio Luna menu products managed by admins."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/CafeOrder" },
+      "description": "Customer orders tracked by both owner and café admins."
+    }
+  }
+}

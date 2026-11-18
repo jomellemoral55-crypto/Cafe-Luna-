@@ -1,0 +1,6 @@
+{
+  "name": "Café Antonio Luna",
+  "description": "Mobile coffee shop ordering application and administrative dashboard for Café Antonio Luna in Pasig City, featuring drink customization, order tracking, and menu management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
